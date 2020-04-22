@@ -20,14 +20,16 @@ ptrline      = #$28
 
 ; Variables
 msg_ptr      = $14  ;,$15 BASIC temp: Integer value
-ptr          = $D1  ; LOW, ptr+1 HIGH han ge ptr to JSR $ffd2 pointer location
-scr_ptr      = $FB  ; $FC High byte
-delay        = $FD
-rnd_range    = $97
-page_end     = $FE  
-temp         = $FF
+print_ptr    = $D1  ; LOW, print_ptr+1=HIGH ; Pointer to location on screen to print 
+scr_ptr      = $FB  ; $FC HIGH ;  Current row on the screen to print numbers
+delay        = $FD  ; Delay value when cycling through numbers before printing tehm
+msg_and_range= $97  ; $98 HIGH; Use by print message to store message location. Used by pick_random to store random number range 
+page_end     = $FE  ; Row number where page_end message will be printed i.e. page_size x page
+temp         = $FF  ; Temp variable used by pick_random... how to remove?
 
 
+TODO Update comments
+TODO Refactor the code for printing messages
 TODO Add smooth scrolling
 
 
@@ -40,26 +42,23 @@ TODO Add smooth scrolling
 ; Add parameters in basic to set line number, columns and max num
 
 
-        jsr  init_random
+start   jsr  init_randomnumber
         jsr  SCRCLR     ; clear screen
         lda  page_size  ; set first page break
         sta  page_end
         LDA  #$16       ;Flip case to charset
         STA  $D018  
         lda  #$00       ; Print on first line
-        sta  ptr
-       
+        sta  print_ptr       
         jsr  print_title
         jsr  print_rows 
         jsr  print_end
-        jsr  SCRCLR     ; clear screen
-        
-        
+        jsr  SCRCLR     ; clear screen        
         rts
 
 
-
-init_random
+; Use the C64 SID to generate random numbers
+init_randomnumber
         lda  CHROUT     
         sta  $d40e     
         sta  $d40f     
@@ -68,23 +67,24 @@ init_random
         rts
 
 
-; Input: ptr
+; Print the title message
 print_title
         lda  #<message_title
-        sta  rnd_range
+        sta  msg_and_range
         lda  #>message_title
-        sta  rnd_range+1
-        lda  #$04
-        sta  ptr+1
+        sta  msg_and_range+1
+        lda  #$04 ; print on first column. line is defined in the main loop as we actually need to print on the 2nd line so that use sees it on the first line when the screen is moved up one line
+        sta  print_ptr+1
         jsr  print_message
         rts
 
-; Input: ptr, ptr+1
+; Print a Press Space to Continue message and wait for the user to push the space bar
+; Input: print_ptr, print_ptr+1 ; screen location to print message
 print_continue
         lda  #<message_continue
-        sta  rnd_range
+        sta  msg_and_range
         lda  #>message_continue
-        sta  rnd_range+1
+        sta  msg_and_range+1
         jsr  print_message
 wait_spacekey
         lda  KEYBUF ;WAIT FOR SPACEBAR
@@ -92,19 +92,21 @@ wait_spacekey
         bne  wait_spacekey
         rts
  
+; Clear the old message so the next numbers can be printed
 print_clear
         lda  #<message_clear
-        sta  rnd_range
+        sta  msg_and_range
         lda  #>message_clear
-        sta  rnd_range+1
+        sta  msg_and_range+1
         jsr  print_message       
         rts
 
+; Print the end message and wait fo rthe user to press space
 print_end
         lda  #<message_end
-        sta  rnd_range
+        sta  msg_and_range
         lda  #>message_end
-        sta  rnd_range+1
+        sta  msg_and_range+1
         jsr  print_message 
 wait_spacekeyend
         lda  KEYBUF ;WAIT FOR SPACEBAR
@@ -112,13 +114,17 @@ wait_spacekeyend
         bne  wait_spacekeyend      
         rts
 
+
+
+
+
 ; Input 
-; ptr - screen postion to print
+; print_ptr - screen postion to print
 ; rng_range - message location
 print_message
         ldy  #$00  
 message_loop
-        lda  (rnd_range),y 
+        lda  (msg_and_range),y 
         beq  end_message 
         cmp  #$C0
         bcc  message_lowercase
@@ -127,7 +133,7 @@ message_loop
 message_lowercase
         and  #$3f      ; Convert Petscii to screen code https://sta.c64.org/cbm64pettoscr.html
 message_print
-        sta  (ptr),y   
+        sta  (print_ptr),y   
         iny
         bne  message_loop 
 end_message
@@ -144,14 +150,14 @@ print_rows
         
         ldx  #$00          ; Lotto Line Number
         lda  #$28
-        sta  ptr           ; Current location on screen
+        sta  print_ptr           ; Current location on screen
         lda  #$04
-        sta  ptr+1
+        sta  print_ptr+1
 print_loop
-        lda  ptr          
+        lda  print_ptr          
         sta  scr_ptr       ; Record begining of line address so we can move to the next line 
-        lda  ptr+1        
-        sta  scr_ptr+1     ; Need to store high byte as ptr can move to the next block when printing columns
+        lda  print_ptr+1        
+        sta  scr_ptr+1     ; Need to store high byte as print_ptr can move to the next block when printing columns
 
         ; Print line header
         PHA
@@ -159,14 +165,14 @@ print_loop
         PHA
         adc  #$01          ; Convert line number to "1" indexed
         jsr  print_decimal ; print line number
-        inc  ptr
-        inc  ptr    
+        inc  print_ptr
+        inc  print_ptr    
         
         ldy  #$00      
         lda  #$3A     
-        sta  (ptr),y   
-        inc  ptr  
-        inc  ptr           ; print space
+        sta  (print_ptr),y   
+        inc  print_ptr  
+        inc  print_ptr           ; print space
         ; Print a line of random numbers
         jsr  pick_random        
         jsr  print_columns   
@@ -178,30 +184,30 @@ print_loop
         clc
         lda  scr_ptr       ; Block x position
         adc  ptrline       ; Move to the next line
-        sta  ptr 
+        sta  print_ptr 
         lda  scr_ptr+1
-        adc  #$00          ; if cross block then add one to ptr+1
-        sta  ptr+1         ; Move to next block if x > block
+        adc  #$00          ; if cross block then add one to print_ptr+1
+        sta  print_ptr+1         ; Move to next block if x > block
         cmp  #$07          ; Don't go past the end of the screen
         bcc  row_nextline
         ; Print title message
         TXA
         PHA
-        ldx ptr            ; store current print location
-        ldy ptr+1
+        ldx print_ptr            ; store current print location
+        ldy print_ptr+1
         lda #$28           ; print title on 2nd line down before screen is moved up one line
-        sta ptr
+        sta print_ptr
         jsr print_title
-        stx ptr            ; restore current print location
-        sty ptr+1
+        stx print_ptr            ; restore current print location
+        sty print_ptr+1
         ; Move screen
         jsr  SCRUP         ; move screen up one line 
         PLA
         TAX
         ; Move cursor
         lda  scr_ptr
-        sta  ptr           ; if last line then set screen postion back to prev line
-        dec  ptr+1
+        sta  print_ptr           ; if last line then set screen postion back to prev line
+        dec  print_ptr+1
 row_nextline
         inx                ; next row
         cpx  page_end
@@ -229,14 +235,14 @@ row_continue
 pick_random
         lda  max_number   ; Random number range
         adc  #$01 
-        sta  rnd_range
+        sta  msg_and_range
         ldx  #$00         ; Column Number
 pick_loop
         inx
-        dec rnd_range
+        dec msg_and_range
 random_number
         lda  $D41B     
-        cmp  rnd_range    ; Range = Max Number - current column + 1
+        cmp  msg_and_range    ; Range = Max Number - current column + 1
         bcs  random_number 
         stx  temp         ; Add current column    
         adc  temp            
@@ -283,12 +289,12 @@ column_loop
         sta  delay
 column_next
         clc
-        lda  ptr          ; move 2 characters to the left. Use adc so we can check if we have crossed a black of memory   
+        lda  print_ptr          ; move 2 characters to the left. Use adc so we can check if we have crossed a black of memory   
         adc  #$03   
-        sta  ptr  
+        sta  print_ptr  
         
         bcc  column_sameblock
-        inc  ptr+1       
+        inc  print_ptr+1       
 column_sameblock
         inx
         cpx  num_columns    
@@ -325,7 +331,7 @@ cyclenumber
         
 
 
-; Displays numbers up to 99 at screen location ptr
+; Displays numbers up to 99 at screen location print_ptr
 ; Input: A - Number to print
 print_decimal
         ldx  #$00      
@@ -338,11 +344,11 @@ decimal_loop
 decimal
         ldy  #$01      
         adc  #$30      
-        sta  (ptr),y   
+        sta  (print_ptr),y   
         dey
         txa
         adc  #$30      
-        sta  (ptr),y   
+        sta  (print_ptr),y   
         rts
 
 
