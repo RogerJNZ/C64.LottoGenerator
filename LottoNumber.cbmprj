@@ -41,9 +41,22 @@
         <FileName>lotto.asm</FileName>
         <FileName>Main.asm</FileName>
         <FileName>Smooth Text.asm</FileName>
+        <FileName>lotto.asm</FileName>
     </BuildList>
     <DetermineBuildOrder>0</DetermineBuildOrder>
     <PaddingByte>0</PaddingByte>
     <AssyBinaryFileLocation />
-    <SourceFiles />
+    <SourceFiles>
+        <SourceFile>
+            <Name>lotto.asm</Name>
+            <PrgName />
+            <FileType>2</FileType>
+            <IncludeInBuild>True</IncludeInBuild>
+            <Regions />
+            <Breakpoints />
+            <Bookmarks />
+            <Topmost>True</Topmost>
+            <FileOpen>True</FileOpen>
+        </SourceFile>
+    </SourceFiles>
 </Project>
